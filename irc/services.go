@@ -107,6 +107,10 @@ func (service *ircService) Notice(rb *ResponseBuffer, text string) {
 	rb.Add(nil, service.prefix, "NOTICE", rb.target.Nick(), text)
 }
 
+func (service *ircService) TaggedNotice(rb *ResponseBuffer, text string, tags map[string]string) {
+	rb.Add(tags, service.prefix, "NOTICE", rb.target.Nick(), text)
+}
+
 // all service commands at the protocol level, by uppercase command name
 // e.g., NICKSERV, NS
 var ergoServicesByCommandAlias map[string]*ircService

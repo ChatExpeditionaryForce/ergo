@@ -753,6 +753,7 @@ func csListHandler(service *ircService, server *Server, client *Client, command 
 }
 
 func csInfoHandler(service *ircService, server *Server, client *Client, command string, params []string, rb *ResponseBuffer) {
+
 	if len(params) == 0 {
 		// #765
 		listRegisteredChannels(service, client.Account(), rb)
@@ -764,21 +765,24 @@ func csInfoHandler(service *ircService, server *Server, client *Client, command 
 		service.Notice(rb, client.t("Invalid channel name"))
 		return
 	}
+	tags := map[string]string{
+		"target": chname,
+	}
 
 	// purge status
 	if client.HasRoleCapabs("chanreg") {
 		purgeRecord, err := server.channels.LoadPurgeRecord(chname)
 		if err == nil {
-			service.Notice(rb, fmt.Sprintf(client.t("Channel %s was purged by the server operators and cannot be used"), chname))
-			service.Notice(rb, fmt.Sprintf(client.t("Purged by operator: %s"), purgeRecord.Oper))
-			service.Notice(rb, fmt.Sprintf(client.t("Purged at: %s"), purgeRecord.PurgedAt.Format(time.RFC1123)))
+			service.TaggedNotice(rb, fmt.Sprintf(client.t("Channel %s was purged by the server operators and cannot be used"), chname), tags)
+			service.TaggedNotice(rb, fmt.Sprintf(client.t("Purged by operator: %s"), purgeRecord.Oper), tags)
+			service.TaggedNotice(rb, fmt.Sprintf(client.t("Purged at: %s"), purgeRecord.PurgedAt.Format(time.RFC1123)), tags)
 			if purgeRecord.Reason != "" {
-				service.Notice(rb, fmt.Sprintf(client.t("Purge reason: %s"), purgeRecord.Reason))
+				service.TaggedNotice(rb, fmt.Sprintf(client.t("Purge reason: %s"), purgeRecord.Reason), tags)
 			}
 		}
 	} else {
 		if server.channels.IsPurged(chname) {
-			service.Notice(rb, fmt.Sprintf(client.t("Channel %s was purged by the server operators and cannot be used"), chname))
+			service.TaggedNotice(rb, fmt.Sprintf(client.t("Channel %s was purged by the server operators and cannot be used"), chname), tags)
 		}
 	}
 
@@ -790,12 +794,12 @@ func csInfoHandler(service *ircService, server *Server, client *Client, command 
 
 	// channel exists but is unregistered, or doesn't exist:
 	if chinfo.Founder == "" {
-		service.Notice(rb, fmt.Sprintf(client.t("Channel %s is not registered"), chname))
+		service.TaggedNotice(rb, fmt.Sprintf(client.t("Channel %s is not registered"), chname), tags)
 		return
 	}
-	service.Notice(rb, fmt.Sprintf(client.t("Channel %s is registered"), chinfo.Name))
-	service.Notice(rb, fmt.Sprintf(client.t("Founder: %s"), chinfo.Founder))
-	service.Notice(rb, fmt.Sprintf(client.t("Registered at: %s"), chinfo.RegisteredAt.Format(time.RFC1123)))
+	service.TaggedNotice(rb, fmt.Sprintf(client.t("Channel %s is registered"), chinfo.Name), tags)
+	service.TaggedNotice(rb, fmt.Sprintf(client.t("Founder: %s"), chinfo.Founder), tags)
+	service.TaggedNotice(rb, fmt.Sprintf(client.t("Registered at: %s"), chinfo.RegisteredAt.Format(time.RFC1123)), tags)
 }
 
 func displayChannelSetting(service *ircService, settingName string, settings ChannelSettings, client *Client, rb *ResponseBuffer) {
