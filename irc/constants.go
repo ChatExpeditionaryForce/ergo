@@ -8,7 +8,7 @@ package irc
 const (
 	// maxLastArgLength is used to simply cap off the final argument when creating general messages where we need to select a limit.
 	// for instance, in MONITOR lists, RPL_ISUPPORT lists, etc.
-	maxLastArgLength = 400
+	maxLastArgLength = 1024
 	// maxTargets is the maximum number of targets for PRIVMSG and NOTICE.
 	maxTargets = 4
 )
