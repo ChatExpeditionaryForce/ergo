@@ -1415,6 +1415,10 @@ func composeMultilineBatch(batchID, fromNickMask, fromAccount string, isBot bool
 	for _, msg := range message.Split {
 		message := ircmsg.MakeMessage(nil, fromNickMask, command, target, msg.Message)
 		message.SetTag("batch", batchID)
+		for k, v := range msg.Tags {
+			message.SetTag(k, v)
+		}
+
 		if msg.Concat {
 			message.SetTag(caps.MultilineConcatTag, "")
 		}

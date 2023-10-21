@@ -142,7 +142,14 @@ func (rb *ResponseBuffer) AddSplitMessageFromClient(fromNickMask string, fromAcc
 				if i == 0 {
 					msgid = message.Msgid
 				}
-				rb.AddFromClient(message.Time, msgid, fromNickMask, fromAccount, isBot, tags, command, target, messagePair.Message)
+				mergedTags := make(map[string]string)
+				for k, v := range tags {
+					mergedTags[k] = v
+				}
+				for k, v := range messagePair.Tags {
+					mergedTags[k] = v
+				}
+				rb.AddFromClient(message.Time, msgid, fromNickMask, fromAccount, isBot, mergedTags, command, target, messagePair.Message)
 			}
 		}
 	}

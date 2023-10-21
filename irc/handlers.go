@@ -2172,7 +2172,7 @@ func absorbBatchedMessage(server *Server, client *Client, msg ircmsg.Message, ba
 	if !isConcat && len(rb.session.batch.message.Split) != 0 {
 		rb.session.batch.lenBytes++ // bill for the newline
 	}
-	rb.session.batch.message.Append(msg.Params[1], isConcat)
+	rb.session.batch.message.Append(msg.Params[1], isConcat, msg.ClientOnlyTags())
 	rb.session.batch.lenBytes += len(msg.Params[1])
 	config := server.Config()
 	if config.Limits.Multiline.MaxBytes < rb.session.batch.lenBytes {
