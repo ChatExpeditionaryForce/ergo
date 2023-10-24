@@ -49,7 +49,7 @@ func (t *JwtServiceConfig) Enabled() bool {
 
 func (t *JwtServiceConfig) Sign(claims MapClaims) (result string, err error) {
 	claims["exp"] = time.Now().Unix() + int64(t.Expiration/time.Second)
-
+	claims["now"] = time.Now().Unix()
 	if t.rsaPrivateKey != nil {
 		token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims(claims))
 		return token.SignedString(t.rsaPrivateKey)
