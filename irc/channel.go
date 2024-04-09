@@ -222,6 +222,8 @@ func (channel *Channel) wakeWriter() {
 
 // equivalent of Socket.send()
 func (channel *Channel) writeLoop() {
+	defer channel.server.HandlePanic()
+
 	for {
 		// TODO(#357) check the error value of this and implement timed backoff
 		channel.performWrite(0)
@@ -545,11 +547,14 @@ func (channel *Channel) ClientStatus(client *Client) (present bool, joinTimeSecs
 
 // helper for persisting channel-user modes for always-on clients;
 // return the channel name and all channel-user modes for a client
-func (channel *Channel) alwaysOnStatus(client *Client) (chname string, status alwaysOnChannelStatus) {
+func (channel *Channel) alwaysOnStatus(client *Client) (ok bool, chname string, status alwaysOnChannelStatus) {
 	channel.stateMutex.RLock()
 	defer channel.stateMutex.RUnlock()
 	chname = channel.name
-	data := channel.members[client]
+	data, ok := channel.members[client]
+	if !ok {
+		return
+	}
 	status.Modes = data.modes.String()
 	status.JoinTime = data.joinTime
 	return
@@ -1615,6 +1620,26 @@ func (channel *Channel) auditoriumFriends(client *Client) (friends []*Client) {
 		}
 	}
 	return
+}
+
+// returns whether the client is visible to unprivileged users in the channel
+// (i.e., respecting auditorium mode). note that this assumes that the client
+// is a member; if the client is not, it may return true anyway
+func (channel *Channel) memberIsVisible(client *Client) bool {
+	// fast path, we assume they're a member so if this isn't an auditorium,
+	// they're visible:
+	if !channel.flags.HasMode(modes.Auditorium) {
+		return true
+	}
+
+	channel.stateMutex.RLock()
+	defer channel.stateMutex.RUnlock()
+
+	clientData, found := channel.members[client]
+	if !found {
+		return false
+	}
+	return clientData.modes.HighestChannelUserMode() != modes.Mode(0)
 }
 
 // data for RPL_LIST

@@ -21,6 +21,7 @@ import (
 	"github.com/ergochat/irc-go/ircfmt"
 	"github.com/ergochat/irc-go/ircmsg"
 	"github.com/ergochat/irc-go/ircreader"
+	"github.com/ergochat/irc-go/ircutils"
 	"github.com/xdg-go/scram"
 
 	"github.com/ergochat/ergo/irc/caps"
@@ -28,6 +29,7 @@ import (
 	"github.com/ergochat/ergo/irc/flatip"
 	"github.com/ergochat/ergo/irc/history"
 	"github.com/ergochat/ergo/irc/modes"
+	"github.com/ergochat/ergo/irc/oauth2"
 	"github.com/ergochat/ergo/irc/sno"
 	"github.com/ergochat/ergo/irc/utils"
 )
@@ -119,12 +121,20 @@ type Client struct {
 
 type saslStatus struct {
 	mechanism string
-	value     string
+	value     ircutils.SASLBuffer
 	scramConv *scram.ServerConversation
+	oauthConv *oauth2.OAuthBearerServer
+}
+
+func (s *saslStatus) Initialize() {
+	s.value.Initialize(saslMaxResponseLength)
 }
 
 func (s *saslStatus) Clear() {
-	*s = saslStatus{}
+	s.mechanism = ""
+	s.value.Clear()
+	s.scramConv = nil
+	s.oauthConv = nil
 }
 
 // what stage the client is at w.r.t. the PASS command:
@@ -362,6 +372,7 @@ func (server *Server) RunClient(conn IRCConn) {
 		isTor:      wConn.Tor,
 		hideSTS:    wConn.Tor || wConn.HideSTS,
 	}
+	session.sasl.Initialize()
 	client.sessions = []*Session{session}
 
 	session.resetFakelag()
@@ -1286,10 +1297,10 @@ func (client *Client) destroy(session *Session) {
 	}
 
 	var quitItem history.Item
-	var channels []*Channel
+	var quitHistoryChannels []*Channel
 	// use a defer here to avoid writing to mysql while holding the destroy semaphore:
 	defer func() {
-		for _, channel := range channels {
+		for _, channel := range quitHistoryChannels {
 			channel.AddHistoryItem(quitItem, details.account)
 		}
 	}()
@@ -1311,8 +1322,11 @@ func (client *Client) destroy(session *Session) {
 	// clean up channels
 	// (note that if this is a reattach, client has no channels and therefore no friends)
 	friends := make(ClientSet)
-	channels = client.Channels()
+	channels := client.Channels()
 	for _, channel := range channels {
+		if channel.memberIsVisible(client) {
+			quitHistoryChannels = append(quitHistoryChannels, channel)
+		}
 		for _, member := range channel.auditoriumFriends(client) {
 			friends.Add(member)
 		}
@@ -1777,6 +1791,8 @@ func (client *Client) wakeWriter() {
 }
 
 func (client *Client) writeLoop() {
+	defer client.server.HandlePanic()
+
 	for {
 		client.performWrite(0)
 		client.writebackLock.Unlock()
@@ -1807,7 +1823,11 @@ func (client *Client) performWrite(additionalDirtyBits uint) {
 		channels := client.Channels()
 		channelToModes := make(map[string]alwaysOnChannelStatus, len(channels))
 		for _, channel := range channels {
-			chname, status := channel.alwaysOnStatus(client)
+			ok, chname, status := channel.alwaysOnStatus(client)
+			if !ok {
+				client.server.logger.Error("internal", "client and channel membership out of sync", chname, client.Nick())
+				continue
+			}
 			channelToModes[chname] = status
 		}
 		client.server.accounts.saveChannels(account, channelToModes)

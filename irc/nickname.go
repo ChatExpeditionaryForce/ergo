@@ -43,6 +43,8 @@ func performNickChange(server *Server, client *Client, target *Client, session *
 		}
 	} else if err == errNicknameReserved {
 		if !isSanick {
+			// see #1594 for context: ERR_NICKNAMEINUSE can confuse clients if the nickname is not
+			// literally in use:
 			if !client.registered {
 				rb.Add(nil, server.name, ERR_NICKNAMEINUSE, details.nick, utils.SafeErrorParam(nickname), client.t("Nickname is reserved by a different account"))
 			}
@@ -120,7 +122,9 @@ func performNickChange(server *Server, client *Client, target *Client, session *
 	}
 
 	for _, channel := range target.Channels() {
-		channel.AddHistoryItem(histItem, details.account)
+		if channel.memberIsVisible(client) {
+			channel.AddHistoryItem(histItem, details.account)
+		}
 	}
 
 	newCfnick := target.NickCasefolded()

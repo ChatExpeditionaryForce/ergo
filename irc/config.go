@@ -38,6 +38,7 @@ import (
 	"github.com/ergochat/ergo/irc/logger"
 	"github.com/ergochat/ergo/irc/modes"
 	"github.com/ergochat/ergo/irc/mysql"
+	"github.com/ergochat/ergo/irc/oauth2"
 	"github.com/ergochat/ergo/irc/passwd"
 	"github.com/ergochat/ergo/irc/utils"
 )
@@ -331,7 +332,9 @@ type AccountConfig struct {
 	Multiclient MulticlientConfig
 	Bouncer     *MulticlientConfig // # handle old name for 'multiclient'
 	VHosts      VHostConfig
-	AuthScript  AuthScriptConfig `yaml:"auth-script"`
+	AuthScript  AuthScriptConfig          `yaml:"auth-script"`
+	OAuth2      oauth2.OAuth2BearerConfig `yaml:"oauth2"`
+	JWTAuth     jwt.JWTAuthConfig         `yaml:"jwt-auth"`
 }
 
 type ScriptConfig struct {
@@ -484,6 +487,7 @@ type Limits struct {
 	ChanListModes        int `yaml:"chan-list-modes"`
 	ChannelLen           int `yaml:"channellen"`
 	IdentLen             int `yaml:"identlen"`
+	RealnameLen          int `yaml:"realnamelen"`
 	KickLen              int `yaml:"kicklen"`
 	MonitorEntries       int `yaml:"monitor-entries"`
 	NickLen              int `yaml:"nicklen"`
@@ -1039,7 +1043,7 @@ func (ce *configPathError) Error() string {
 	return fmt.Sprintf("Couldn't apply config override `%s`: %s", ce.name, ce.desc)
 }
 
-func mungeFromEnvironment(config *Config, envPair string) (applied bool, err *configPathError) {
+func mungeFromEnvironment(config *Config, envPair string) (applied bool, name string, err *configPathError) {
 	equalIdx := strings.IndexByte(envPair, '=')
 	name, value := envPair[:equalIdx], envPair[equalIdx+1:]
 	if strings.HasPrefix(name, "ERGO__") {
@@ -1047,7 +1051,7 @@ func mungeFromEnvironment(config *Config, envPair string) (applied bool, err *co
 	} else if strings.HasPrefix(name, "ORAGONO__") {
 		name = strings.TrimPrefix(name, "ORAGONO__")
 	} else {
-		return false, nil
+		return false, "", nil
 	}
 	pathComponents := strings.Split(name, "__")
 	for i, pathComponent := range pathComponents {
@@ -1058,10 +1062,10 @@ func mungeFromEnvironment(config *Config, envPair string) (applied bool, err *co
 	t := v.Type()
 	for _, component := range pathComponents {
 		if component == "" {
-			return false, &configPathError{name, "invalid", nil}
+			return false, "", &configPathError{name, "invalid", nil}
 		}
 		if v.Kind() != reflect.Struct {
-			return false, &configPathError{name, "index into non-struct", nil}
+			return false, "", &configPathError{name, "index into non-struct", nil}
 		}
 		var nextField reflect.StructField
 		success := false
@@ -1087,7 +1091,7 @@ func mungeFromEnvironment(config *Config, envPair string) (applied bool, err *co
 			}
 		}
 		if !success {
-			return false, &configPathError{name, fmt.Sprintf("couldn't resolve path component: `%s`", component), nil}
+			return false, "", &configPathError{name, fmt.Sprintf("couldn't resolve path component: `%s`", component), nil}
 		}
 		v = v.FieldByName(nextField.Name)
 		// dereference pointer field if necessary, initialize new value if necessary
@@ -1101,9 +1105,9 @@ func mungeFromEnvironment(config *Config, envPair string) (applied bool, err *co
 	}
 	yamlErr := yaml.Unmarshal([]byte(value), v.Addr().Interface())
 	if yamlErr != nil {
-		return false, &configPathError{name, "couldn't deserialize YAML", yamlErr}
+		return false, "", &configPathError{name, "couldn't deserialize YAML", yamlErr}
 	}
-	return true, nil
+	return true, name, nil
 }
 
 // LoadConfig loads the given YAML configuration file.
@@ -1115,7 +1119,7 @@ func LoadConfig(filename string) (config *Config, err error) {
 
 	if config.AllowEnvironmentOverrides {
 		for _, envPair := range os.Environ() {
-			applied, envErr := mungeFromEnvironment(config, envPair)
+			applied, name, envErr := mungeFromEnvironment(config, envPair)
 			if envErr != nil {
 				if envErr.fatalErr != nil {
 					return nil, envErr
@@ -1123,7 +1127,7 @@ func LoadConfig(filename string) (config *Config, err error) {
 					log.Println(envErr.Error())
 				}
 			} else if applied {
-				log.Printf("applied environment override: %s\n", envPair)
+				log.Printf("applied environment override: %s\n", name)
 			}
 		}
 	}
@@ -1390,13 +1394,42 @@ func LoadConfig(filename string) (config *Config, err error) {
 		config.Accounts.VHosts.validRegexp = defaultValidVhostRegex
 	}
 
-	saslCapValue := "PLAIN,EXTERNAL,SCRAM-SHA-256"
-	if !config.Accounts.AdvertiseSCRAM {
-		saslCapValue = "PLAIN,EXTERNAL"
-	}
-	config.Server.capValues[caps.SASL] = saslCapValue
-	if !config.Accounts.AuthenticationEnabled {
+	if config.Accounts.AuthenticationEnabled {
+		saslCapValues := []string{"PLAIN", "EXTERNAL"}
+		if config.Accounts.AdvertiseSCRAM {
+			saslCapValues = append(saslCapValues, "SCRAM-SHA-256")
+		}
+		if config.Accounts.OAuth2.Enabled {
+			saslCapValues = append(saslCapValues, "OAUTHBEARER")
+		}
+		config.Server.capValues[caps.SASL] = strings.Join(saslCapValues, ",")
+	} else {
 		config.Server.supportedCaps.Disable(caps.SASL)
+	}
+
+	if err := config.Accounts.OAuth2.Postprocess(); err != nil {
+		return nil, err
+	}
+
+	if err := config.Accounts.JWTAuth.Postprocess(); err != nil {
+		return nil, err
+	}
+
+	if config.Accounts.OAuth2.Enabled && config.Accounts.OAuth2.AuthScript && !config.Accounts.AuthScript.Enabled {
+		return nil, fmt.Errorf("oauth2 is enabled with auth-script, but no auth-script is enabled")
+	}
+
+	var bearerCapValues []string
+	if config.Accounts.OAuth2.Enabled {
+		bearerCapValues = append(bearerCapValues, "oauth2")
+	}
+	if config.Accounts.JWTAuth.Enabled {
+		bearerCapValues = append(bearerCapValues, "jwt")
+	}
+	if len(bearerCapValues) != 0 {
+		config.Server.capValues[caps.Bearer] = strings.Join(bearerCapValues, ",")
+	} else {
+		config.Server.supportedCaps.Disable(caps.Bearer)
 	}
 
 	if !config.Accounts.Registration.Enabled {
@@ -1566,6 +1599,10 @@ func (config *Config) getOutputPath(filename string) string {
 func (config *Config) isRelaymsgIdentifier(nick string) bool {
 	if !config.Server.Relaymsg.Enabled {
 		return false
+	}
+
+	if strings.HasPrefix(nick, "#") {
+		return false // #2114
 	}
 
 	for _, char := range config.Server.Relaymsg.Separators {
