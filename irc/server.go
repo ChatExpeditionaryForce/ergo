@@ -96,6 +96,9 @@ type Server struct {
 	semaphores        ServerSemaphores
 	flock             flock.Flocker
 	defcon            atomic.Uint32
+
+	// CEF
+	grumbleManager *Grumble
 }
 
 // NewServer returns a new Oragono server.
@@ -162,6 +165,8 @@ func (server *Server) Shutdown() {
 // Run starts the server.
 func (server *Server) Run() {
 	defer server.Shutdown()
+
+	server.grumbleManager = grumbleConnection(server)
 
 	for {
 		select {

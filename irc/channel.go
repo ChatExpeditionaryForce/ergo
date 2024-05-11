@@ -795,6 +795,8 @@ func (channel *Channel) Join(client *Client, key string, isSajoin bool, rb *Resp
 	}
 
 	client.server.logger.Debug("channels", fmt.Sprintf("%s joined channel %s", details.nick, chname))
+	// I think this is assured to always be a good join point
+	client.server.grumbleManager.grumbleMessage("POLL", channel.NameCasefolded())
 
 	givenMode := func() (givenMode modes.Mode) {
 		channel.joinPartMutex.Lock()
@@ -991,6 +993,7 @@ func (channel *Channel) playJoinForSession(session *Session) {
 		channel.Names(client, sessionRb)
 	}
 	sessionRb.Send(false)
+	client.server.grumbleManager.grumbleMessage("POLL", channel.NameCasefolded())
 }
 
 // Part parts the given client from this channel, with the given message.
@@ -1450,6 +1453,7 @@ func (channel *Channel) Quit(client *Client) {
 		client.server.channels.Cleanup(channel)
 	}
 	client.removeChannel(channel)
+	client.server.grumbleManager.kickFromGrumble(channel.name, client.Username())
 }
 
 func (channel *Channel) Kick(client *Client, target *Client, comment string, rb *ResponseBuffer, hasPrivs bool) {

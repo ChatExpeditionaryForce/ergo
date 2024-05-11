@@ -765,8 +765,15 @@ func csInfoHandler(service *ircService, server *Server, client *Client, command 
 		service.Notice(rb, client.t("Invalid channel name"))
 		return
 	}
+
+	var chinfo RegisteredChannel
+	channel := server.channels.Get(params[0])
+	if channel != nil {
+		chinfo = channel.exportSummary()
+	}
+
 	tags := map[string]string{
-		"target": chname,
+		"target": chinfo.Name,
 	}
 
 	// purge status
@@ -784,12 +791,6 @@ func csInfoHandler(service *ircService, server *Server, client *Client, command 
 		if server.channels.IsPurged(chname) {
 			service.TaggedNotice(rb, fmt.Sprintf(client.t("Channel %s was purged by the server operators and cannot be used"), chname), tags)
 		}
-	}
-
-	var chinfo RegisteredChannel
-	channel := server.channels.Get(params[0])
-	if channel != nil {
-		chinfo = channel.exportSummary()
 	}
 
 	// channel exists but is unregistered, or doesn't exist:
