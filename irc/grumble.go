@@ -77,8 +77,8 @@ func handleConnection(conn net.Conn, instance *Grumble) {
 		fmt.Printf("grumble: %+q\n", line)
 		switch line[0] {
 		case "PART":
-			if len(line[1]) == 0 {
-				println("??? ", line[1], len(line[1]))
+			if len(line) == 1 || len(line[1]) == 0 {
+				println("skipping malformed line")
 				continue
 			}
 			channel := instance.server.channels.Get(line[1])

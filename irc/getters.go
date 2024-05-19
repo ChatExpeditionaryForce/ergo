@@ -410,7 +410,8 @@ func (client *Client) SetMode(mode modes.Mode, on bool) bool {
 
 func (client *Client) SetRealname(realname string) {
 	client.stateMutex.Lock()
-	client.realname = realname
+	// TODO: make this configurable
+	client.realname = realname[:64]
 	alwaysOn := client.registered && client.alwaysOn
 	client.stateMutex.Unlock()
 	if alwaysOn {
