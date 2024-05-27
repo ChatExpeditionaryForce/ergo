@@ -16,7 +16,7 @@ func IsRestrictedCTCPMessage(message string) bool {
 
 type MessagePair struct {
 	Message string
-	Tags map[string]string
+	Tags    map[string]string
 	Concat  bool // should be relayed with the multiline-concat tag
 }
 
@@ -38,7 +38,7 @@ type SplitMessage struct {
 
 func MakeMessage(original string) (result SplitMessage) {
 	result.Message = original
-	result.Msgid = GenerateSecretToken()
+	result.Msgid = GenerateMessageIdStr()
 	result.SetTime()
 
 	return
@@ -46,12 +46,12 @@ func MakeMessage(original string) (result SplitMessage) {
 
 func (sm *SplitMessage) Append(message string, concat bool, tags map[string]string) {
 	if sm.Msgid == "" {
-		sm.Msgid = GenerateSecretToken()
+		sm.Msgid = GenerateMessageIdStr()
 	}
 	sm.Split = append(sm.Split, MessagePair{
 		Message: message,
 		Concat:  concat,
-		Tags: tags,
+		Tags:    tags,
 	})
 }
 

@@ -7,7 +7,7 @@ package caps
 
 const (
 	// number of recognized capabilities:
-	numCapabs = 35
+	numCapabs = 36
 	// length of the uint32 array that represents the bitset:
 	bitsetLen = 2
 )
@@ -152,6 +152,8 @@ const (
 	// ZNCSelfMessage is the ZNC vendor capability named "znc.in/self-message":
 	// https://wiki.znc.in/Query_buffers
 	ZNCSelfMessage Capability = iota
+
+	ExtendedNames Capability = iota
 )
 
 // `capabilityNames[capab]` is the string name of the capability `capab`
@@ -192,5 +194,6 @@ var (
 		"userhost-in-names",
 		"znc.in/playback",
 		"znc.in/self-message",
+		"cef/extended-names",
 	}
 )

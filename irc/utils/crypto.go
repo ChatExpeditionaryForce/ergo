@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -31,7 +32,25 @@ var (
 
 const (
 	SecretTokenLength = 26
+	MachineId         = 1 // Since there's no scaling Ergo, id is fixed at 1. Other things can have 2-127
 )
+
+var inc uint64 = 0
+
+// slingamn, if you ever see this, i'm sorry - I just didn't want to attach what i think is redundant data to every
+// message.
+func GenerateMessageId() uint64 {
+	inc++
+	var ts = time.Now().Unix() & 0xffffffffffff
+	var flake = uint64(ts << 16)
+	flake |= MachineId << 10
+	flake |= inc % 0x3ff
+	return flake
+}
+
+func GenerateMessageIdStr() string {
+	return strconv.FormatUint(GenerateMessageId(), 10)
+}
 
 // generate a secret token that cannot be brute-forced via online attacks
 func GenerateSecretToken() string {

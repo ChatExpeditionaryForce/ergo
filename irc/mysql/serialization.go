@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 
 	"github.com/ergochat/ergo/irc/history"
-	"github.com/ergochat/ergo/irc/utils"
 )
 
 // 123 / '{' is the magic number that means JSON;
@@ -18,6 +17,7 @@ func unmarshalItem(data []byte, result *history.Item) (err error) {
 	return json.Unmarshal(data, result)
 }
 
+// TODO: probably should convert the internal mysql column to uint
 func decodeMsgid(msgid string) ([]byte, error) {
-	return utils.B32Encoder.DecodeString(msgid)
+	return []byte(msgid), nil
 }

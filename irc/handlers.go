@@ -2713,7 +2713,7 @@ func redactHandler(server *Server, client *Client, msg ircmsg.Message, rb *Respo
 	var members []*Client // members of a channel, or both parties of a PM
 	var canDelete CanDelete
 
-	msgid := utils.GenerateSecretToken()
+	msgid := utils.GenerateMessageIdStr()
 	time := time.Now().UTC().Round(0)
 	details := client.Details()
 	isBot := client.HasMode(modes.Bot)

@@ -477,6 +477,12 @@ func (channel *Channel) Names(client *Client, rb *ResponseBuffer) {
 			if respectAuditorium && memberData.modes.HighestChannelUserMode() == modes.Mode(0) {
 				continue
 			}
+			if rb.session.capabilities.Has(caps.ExtendedNames) {
+				away, _ := target.Away()
+				if away {
+					nick = nick + "*"
+				}
+			}
 			tl.AddParts(memberData.modes.Prefixes(isMultiPrefix), nick)
 		}
 	}
@@ -1517,7 +1523,7 @@ func (channel *Channel) Purge(source string) {
 	now := time.Now().UTC()
 	for _, member := range members {
 		tnick := member.Nick()
-		msgid := utils.GenerateSecretToken()
+		msgid := utils.GenerateMessageIdStr()
 		for _, session := range member.Sessions() {
 			session.sendFromClientInternal(false, now, msgid, source, "*", false, nil, "KICK", chname, tnick, member.t("This channel has been purged by the server administrators and cannot be used"))
 		}
